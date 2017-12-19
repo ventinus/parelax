@@ -1,7 +1,11 @@
-import form from './modules/form'
+import {
+  parallax
+} from './modules'
 
 const main = () => {
-  const modules = {form}
+  const modules = {
+    parallax
+  }
 
   const initModules = () => {
     for (let k in modules) {

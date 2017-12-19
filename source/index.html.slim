@@ -1,7 +1,18 @@
-div.welcome
-  div.logo
-    = image_tag "middleman-logo.svg"
-  h1 Middleman is Running
-  p.doc
-    = link_to "Read Documentation Online", "https://middlemanapp.com", target: "_blank"
-    
+.parelax-container.parelax-container--full
+  h1.parelax.parelax--1 Item 1
+  / h1.parelax.parelax--1.js-parelax parelax-translateY="value=100;spread=top,0.75,bottom,0.25" Parelax Item 1
+
+.parelax-container.parelax-container--half style="position:relative;z-index:1;"
+  / h1.parelax.parelax--1 Parelax Item 2
+  h1.parelax.parelax--2.js-parelax parelax-rotateY="value=from,0,to,180;spread=bottom,1,center,0.5" Parelax Item 2
+  / h1.parelax.parelax--2.js-parelax parelax-translateY="value=from,-2000,to,0;spread=bottom,0,center,0.5" Parelax Item 2
+  / h1.parelax.parelax--2.js-parelax parelax-translateX="value=-100" parelax-translateY="value=120" parelax-scaleX="value=from,0,to,2;spread=top,0.75,bottom,0.25" Parelax Item 2
+
+.parelax-container.parelax-container--half
+  / h1.parelax.parelax--3.js-parelax parelax-margin="value=from,0 0 0 0,to,50 0 0 0" parelax-height="value=from,88,to,200" Parelax Item 3
+  h1.parelax.parelax--3.js-parelax parelax-height="value=from,500,to,8" Parelax Item 3
+  / h1.parelax.parelax--3.js-parelax parelax-translateX="value=from,0,to,0.5;spread=top,1,center,0.5" Parelax Item 3
+
+.parelax-container.parelax-container--full
+  h1.parelax.parelax--1 Parelax Item 4
+  / h1.parelax.parelax--1.js-parelax parelax-translateY="value=100;spread=top,0.75,bottom,0.25" Parelax Item 4

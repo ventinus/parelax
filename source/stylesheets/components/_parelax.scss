@@ -1,0 +1,27 @@
+.parelax-container { position: relative; }
+
+.parelax-container--full {
+  height: 100vh;
+  background-color: red;
+}
+
+.parelax-container--half {
+  height: 50vh;
+  background-color: green;
+
+  & + .parelax-container--half { background-color: blue; }
+}
+
+.parelax {
+  padding: 20px;
+  background-color: black;
+  color: white;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.parelax--1 {}
+.parelax--2 {}
+.parelax--3 {}
