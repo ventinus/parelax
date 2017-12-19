@@ -55,7 +55,7 @@ const parelax = (selector = '.js-parelax') => {
       normal: ['translateY', 'translateX', 'scaleX', 'skewY', 'skewX', 'scaleY', 'rotate', 'rotate3d', 'rotateX', 'rotateY', 'rotateZ']
     },
     css: {
-      normal: ['width', 'height', 'padding', 'margin', 'fontSize', 'zIndex']
+      normal: ['width', 'height', 'padding', 'margin', 'fontSize', 'zIndex', 'opacity']
     },
     all: {}
   }
@@ -112,8 +112,18 @@ const parelax = (selector = '.js-parelax') => {
     const {currentScroll} = props
 
     return Object.keys(styles).reduce((a, k, i) => {
-      return `${a}${k}:${styles[k].scales.map(s => `${s(currentScroll)}px`).join(' ')};`
+      return `${a}${k}:${styles[k].scales.map(s => setStyleDisplay(s(currentScroll), k)).join(' ')};`
     }, '')
+  }
+
+  // formats inline style correctly. with or without 'px'
+  const setStyleDisplay = (value, attr) => {
+    switch (attr) {
+      case 'opacity':
+        return value
+      default:
+        return `${value}px`
+    }
   }
 
   const rotateVal = (name, rotateData) => !rotateData ? '' : `${name}(${rotateData.scales[0](props.currentScroll)}deg)`
@@ -291,6 +301,7 @@ const parelax = (selector = '.js-parelax') => {
     const tForm = generateTransform(data.transforms)
     const styles = generateStyle(data.styles)
 
+    console.log(styles)
     data.element.style = styles
     data.element.style.transform = tForm
     data.currentTransform = tForm
@@ -329,6 +340,8 @@ const parelax = (selector = '.js-parelax') => {
         }
       }
 
+      // debugger
+      // console.log(data)
       updateTransform(data)
       return data
     })
