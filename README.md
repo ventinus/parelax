@@ -1,29 +1,9 @@
-# Canvas Middleman Template
+# Parelax
+### (The parallax lib)
 
- [![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy)
+[See Parelax](https://www.youtube.com/watch?v=67-YUqCzfsc)
 
- This is the template for building Middleman static sites.
+Still a WIP, middleman/webpack setup is for quick browser testing
 
- ##Dependencies
-
- ### Yarn
- ```brew install yarn```
-
-
- ### Imageoptim
-
- ```brew install advancecomp gifsicle jhead jpegoptim jpeg optipng pngcrush pngquant jonof/kenutils/pngout```
-
-```yarn install -g svgo```
-
-## Deployment
-
-#### Staging
-```
-middleman build
-```
-
-#### Production
-```
-TARGET=production middleman build
-```
+### Goals
+- Create a highly performant, easy to use, and flexible parallax library
