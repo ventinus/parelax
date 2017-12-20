@@ -12,6 +12,16 @@
   & + .parelax-container--half { background-color: blue; }
 }
 
+.parelax-wrapper {
+  height: 400px;
+  border: 2px solid black;
+  position: absolute;
+  left: 0;
+  width: 100%;
+}
+
+// .js-parelax { position: absolute; }
+
 .parelax {
   padding: 20px;
   background-color: black;

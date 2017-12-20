@@ -8,7 +8,6 @@ import {getWindowHeight} from '.'
 //  - define from and to values (in px/number ie not %) for transitioning property and start and end (0-1) checkpoints
 //  - be able to "aniamte" any numeric property beyond just transforms
 
-
 // todos:
 //  add support for percentages
 //  add css properties: top, right, bottom, left
@@ -16,6 +15,12 @@ import {getWindowHeight} from '.'
 
 // down the line:
 //  how to calculate rotation in matrix (or at least combine all rotations into one)
+//
+//  do parallax elements require absolute positioning? regardless, how to handle parallax
+//  inside another parallax so that they can animate independently (necessitating absolute
+//  positioning). maybe dom structure is the better answer (where possible). also, if
+//  absolute position, then instruct the parent element to take the height of parallaxed
+//  element to counter collapse
 
 const parelax = (selector = '.js-parelax') => {
   const props = {
@@ -175,12 +180,12 @@ const parelax = (selector = '.js-parelax') => {
     // const t = "value=100;spread=top,0.75,bottom,0.25"
     const split = t.split(';').map(s => s.split('='))
     const value = split.find(s => s[0] === 'value')[1]
-    const spread = split.find(s => s[0] === 'spread')[1]
+    const spread = split.find(s => s[0] === 'spread')
 
     const result = {
       spread: {
-        start: {top: 1},
-        finish: {bottom: 0}
+        start: ['top', 1],
+        finish: ['bottom', 0]
       },
       value: value.includes(',')
         ? chunk(value.split(','), 2).reduce((a, [k ,v]) => ({
@@ -193,16 +198,12 @@ const parelax = (selector = '.js-parelax') => {
         }
     }
 
-
     if (spread) {
-      const [start, finish] = chunk(spread.split(','), 2).map(set => {
+      const [start, finish] = chunk(spread[1].split(','), 2).map(set => {
         return [set[0], +set[1]]
       }).sort((a, b) =>  b[1] - a[1])
 
-      result.spread = {
-        start,
-        finish
-      }
+      result.spread = {start, finish}
     }
 
     return result
