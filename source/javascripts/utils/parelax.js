@@ -10,7 +10,6 @@ import {getWindowHeight} from '.'
 
 // todos:
 //  add support for percentages
-//  add css properties: top, right, bottom, left
 //  add ability to animate things on a quadratic curve (ie animate opacity in and out)
 
 // down the line:
@@ -174,15 +173,25 @@ const parelax = (selector = '.js-parelax') => {
     return computedTransform === 'none' ? '' : computedTransform
   }
 
-  // takes the string value from the element attribute and given the flexibility of definition,
-  // structures it meaningfully
-  const structureElData = (attr, t) => {
-    // const t = "value=100;spread=top,0.75,bottom,0.25"
-    const split = t.split(';').map(s => s.split('='))
+  /**
+   * Takes the CSS atttribute and the value as defined in the DOM, parses
+   * it to an object filling in any defaults not defined. Spread denotes which
+   * parts of the element and where in the viewport to enact changes. Value
+   * contains the from and to numbers to animate between and gets mapped to
+   * the scale domain
+   *
+   * @param  {String} attr          Base CSS attribute
+   * @param  {String} attrValue     Value of the attribute
+   * @return {Object}               Returns value and spread data
+   */
+  const structureElData = (attr, attrValue) => {
+    // const attrValue = "value=100;spread=top,0.75,bottom,0.25"
+    const split = attrValue.split(';').map(s => s.split('='))
     const value = split.find(s => s[0] === 'value')[1]
     const spread = split.find(s => s[0] === 'spread')
 
     const result = {
+      // default spread
       spread: {
         start: ['top', 1],
         finish: ['bottom', 0]
@@ -192,6 +201,7 @@ const parelax = (selector = '.js-parelax') => {
           ...a,
           [k]: attrParser(attr, v)
         }), {})
+        // default value
         : {
           from: [+value / 2],
           to: [+value / -2]
