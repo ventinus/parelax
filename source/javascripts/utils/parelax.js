@@ -7,8 +7,6 @@ import {checkpoint, getWindowHeight} from '.'
 //  - all checkpoints are defined on a percentage in/out viewport basis
 //  - define from and to values (in px/number ie not %) for transitioning property and start and end (0-1) checkpoints
 //  - be able to "aniamte" any numeric property beyond just transforms
-//  -
-
 
 // possible issues:
 
@@ -32,13 +30,14 @@ const parelax = (selector = '.js-parelax') => {
       //       scale: scaleLinear().domain().range().clamp(true)
       //     }
       //   },
+      //   styles: {}
       //   dimensions: {
       //     top: 1 // real top value without transforms (or with preexisting transforms)
       //     height: 1
       //   }
       // }
     ],
-    ckPoint: checkpoint(),
+    // ckPoint: checkpoint(),
     currentScroll: window.pageYOffset,
     viewportHeight: getWindowHeight(),
     // amount beyond viewport to start responding to an element "inview"
@@ -50,6 +49,13 @@ const parelax = (selector = '.js-parelax') => {
 
   const cbs = {}
 
+  /**
+   * Complete list of animatable properties. transform, css, and all each have a `normal` key,
+   * which is the raw CSS property name, and they each have a `prefixed` key which prefixes they
+   * CSS property with 'parelax` or otherwise defined prefix
+   *
+   * @type {Object}
+   */
   const attrs = {
     transform: {
       normal: ['translateY', 'translateX', 'scaleX', 'skewY', 'skewX', 'scaleY', 'rotate', 'rotate3d', 'rotateX', 'rotateY', 'rotateZ']
@@ -70,24 +76,16 @@ const parelax = (selector = '.js-parelax') => {
     return `parelax-${str}`
   }
 
-  // callback for checkpoint to simulate elements scrolled inview at bottom of viewport
-  const onElementTopAtBottom = (elementIndex, dir) => {
-    props.elData[elementIndex].inview = dir === 'up'
-  }
-
-  // callback for checkpoint to simulate elements scrolled inview at top of viewport
-  const onElementBottomAtTop = (elementIndex, dir) => {
-    props.elData[elementIndex].inview = dir === 'down'
-  }
-
-  const onScroll = () => {
-    const inviewEls = props.elData.filter(el => el.inview)
-    if (inviewEls.length === 0) return
-    props.currentScroll = window.pageYOffset
-    inviewEls.forEach(updateTransform)
-  }
-
-  const generateTransform = (tForms) => {
+  /**
+   * Given the transforms object created from `setupData`, combines the values based on the
+   * current scroll into a normal matrix (not matrix3d (yet (maybe))) as well as any rotation
+   * values appended after the matrix (because i dont know how to calculate rotation into a matrix
+   * (and matrix3d))
+   *
+   * @param  {Object} tForms  Set of transforms
+   * @return {String}         Matrix and rotation style to be applied inline
+   */
+  const generateTransform = tForms => {
     const {currentScroll} = props
     const [initialScaleX, initialSkewY, initialSkewX, initialScaleY, initialX, initialY] = tForms.initial
     const {scaleX, skewY, skewX, scaleY, translateX, translateY, rotate, rotateX, rotateY, rotate3d} = tForms
@@ -107,7 +105,23 @@ const parelax = (selector = '.js-parelax') => {
     return `${matrix([scX, skY, skX, scY, tX, tY])} ${r} ${rX} ${rY} ${r3d}`.trim()
   }
 
-  // creates the string of inline styles from any number of style objects and their scales
+  /**
+   * Given a rotate property name, checks if the given data to calculate value based on scroll position
+   * exists, otherwise returns the corresponding inline rotate value for inline style use
+   *
+   * @param  {String} name       CSS property name for any rotate
+   * @param  {Object} rotateData Data object created by `setupData` for an element
+   * @return {String}            Inline CSS value for rotation
+   */
+  const rotateVal = (name, rotateData) => !rotateData ? '' : `${name}(${rotateData.scales[0](props.currentScroll)}deg)`
+
+  /**
+   * Similar to `generateTransform`, combines and returns all the styles for an element
+   * based on the current scroll and each styles scales to be applied inline to that element
+   *
+   * @param  {Object} styles Set of styles
+   * @return {String}        Inline string of styles
+   */
   const generateStyle = styles => {
     const {currentScroll} = props
 
@@ -116,23 +130,39 @@ const parelax = (selector = '.js-parelax') => {
     }, '')
   }
 
-  // formats inline style correctly. with or without 'px'
+  /**
+   * Formats inline styles correctly. Currently detecting whether a CSS property uses px or not
+   *
+   * @param  {Number} value CSS property value
+   * @param  {String} attr  CSS property
+   * @return {String}       Resulting CSS value
+   */
   const setStyleDisplay = (value, attr) => {
     switch (attr) {
       case 'opacity':
-        return value
+        return `${value}`
       default:
         return `${value}px`
     }
   }
 
-  const rotateVal = (name, rotateData) => !rotateData ? '' : `${name}(${rotateData.scales[0](props.currentScroll)}deg)`
-
+  /**
+   * Joins and wraps array values with matrix string for inline styles
+   *
+   * @param  {Array}  array Regular matrix values
+   * @return {String}       Inline matrix style
+   */
   const matrix = (array = [1, 0, 0, 1, 0, 0]) => `matrix(${array.join(',')})`
 
-  // returns values (in pixels) from a matrix string
+  /**
+   * Takes a matrix string and returns the number values at each position
+   * Note: values are in px
+   *
+   * @param  {String} matrix Matrix string, as retrieved from `getComputedStyle`
+   * @return {Array}         Each value in the matrix passed through parseFloat
+   */
   const parseMatrix = matrix => {
-    return matrix.length === 0 ? [1, 0, 0, 1, 0, 0] : matrix.substring(7).split(',').map(parseFloat)
+    return matrix.length === 0 ? [1, 0, 0, 1, 0, 0] : matrix.substring(7, matrix.length - 1).split(',').map(parseFloat)
   }
 
   // returns top and height values of an element with scroll value taken into account
@@ -148,31 +178,6 @@ const parelax = (selector = '.js-parelax') => {
   const getInitialTransform = element => {
     const computedTransform = window.getComputedStyle(element).transform
     return computedTransform === 'none' ? '' : computedTransform
-  }
-
-  const onResize = () => {
-    props.viewportHeight = getWindowHeight()
-    // props.adjustedOffset = props.viewportHeight * 0.1
-    cacheData()
-    props.elData.forEach(updateTransform)
-  }
-
-  const createChildren = () => {
-    els = document.querySelectorAll(selector)
-  }
-
-  // given a style attribute and the value, handles the different ways those values are interpreted
-  // example multi value attributes get stored as arrays and single values are converted to numbers
-  // returning the default single value in an array to maintain method of using values in setting range
-  // in setupData
-  const attrParser = (attr, value) => {
-    switch (attr) {
-      case 'margin':
-      case 'rotate3d':
-        return value.split(' ').map(n => +n)
-      default:
-        return [+value]
-    }
   }
 
   // takes the string value from the element attribute and given the flexibility of definition,
@@ -205,36 +210,6 @@ const parelax = (selector = '.js-parelax') => {
     return parsed
   }
 
-  // const cacheData = () => {
-  //   props.elData = props.elData.map(data => {
-  //     data.element.style.transform = ''
-  //     const initial = getInitialTransform(data.element)
-  //     const [initialX, initialY] = parseMatrix(initial)
-  //     const {top, height} = getDimensions(data.element)
-
-  //     return {
-  //       ...data,
-  //       transforms: {
-  //         ...data.transforms,
-  //         ...reduce(omit(data.transforms, 'initial'), (a, c, k) => {
-  //           return {
-  //             ...a,
-  //             [k]: {
-  //               ...c,
-  //               scale: c.scale.domain(scaleDomain(top, height))
-  //             }
-  //           }
-  //         }, {}),
-  //         initial: {
-  //           x: initialX,
-  //           y: initialY
-  //         },
-  //       },
-  //       dimensions: {top, height}
-  //     }
-  //   })
-  // }
-
   // returns an array of start and end *scroll* values to scale from (anything that starts in the viewport would be zero)
   // accounts for changes that affect element vertically - translateY, scaleY, height, skewY, fontSize, margin, padding
   const genDomain = (top, height, spread, attr, valueChange) => {
@@ -248,7 +223,180 @@ const parelax = (selector = '.js-parelax') => {
     return [(top - startSpread) + verticalChange.from, (top - finishSpread) + verticalChange.to]
   }
 
-  // each attribute affects vertical change
+  /**
+   * Figures out how much inside and outside of viewport to change element values.
+   * for example, only need to adjsut an elemnet when bottom of element is at the bottom
+   * of the viewport or the center of the element is at the center of the viewport
+   *
+   * @param  {Number} elementHeight     Height of element
+   * @param  {String} [anchorPoint      Part of element to measure from
+   * @param  {Number} percentage]       Number from 0-1 (or beyond for offscreen values) to measure to
+   * @return {Number}                   Difference from normal element top value to start/end animate
+   */
+  const interpretSpread = (elementHeight, [anchorPoint, percentage]) => {
+    const anchorMap = {
+      top: 0,
+      center: elementHeight / 2,
+      bottom: elementHeight
+    }
+
+    return (props.viewportHeight * percentage) - anchorMap[anchorPoint]
+  }
+
+  /**
+   * Uses the data pertaining to an element to update styles and transforms
+   *
+   * @param  {Object} data    single data piece from props.elData for an element
+   * @return {undefined}
+   */
+  const updateTransform = data => {
+    const tForm = generateTransform(data.transforms)
+    const styles = generateStyle(data.styles)
+
+    // TODO: do i need to store currentStyles? why store currentTransform?
+    data.element.style = styles
+    data.element.style.transform = tForm
+    data.currentTransform = tForm
+  }
+
+  /**
+   * Sets value for props.elData, looping over all parelax elements, destructuring and storing necessary
+   * values pertaining to that element (most relevant is the scale for interpreting scroll value) to
+   * correctly animate it based on scroll position
+   *
+   * @return {undefined}
+   */
+  const setupData = () => {
+    props.elData = map(els, element => {
+      // get computed matrix transform style
+      const initialTransform = getInitialTransform(element)
+      const {top, height} = getDimensions(element)
+      const attrCreatorReducer = attrCreator(element, top, height)
+
+      const data = {
+        element: element,
+        inview: true,
+        dimensions: {top, height},
+        transforms: {
+          initial: parseMatrix(initialTransform),
+          ...attrs.transform.prefixed.reduce(attrCreatorReducer, {})
+        },
+        styles: {
+          ...attrs.css.prefixed.reduce(attrCreatorReducer, {})
+        }
+      }
+
+      updateTransform(data)
+      return data
+    })
+  }
+
+  /**
+   * after element, that elements top and height are passed to first function, return the
+   * function to run through reduce to generate the data objects for each attribute with the
+   * needed scales for each attr
+   *
+   * @param  {DOM Node} element [description]
+   * @param  {Number} top     [description]
+   * @param  {Number} height) [description]
+   * @return {Object}         [description]
+   */
+  const attrCreator = (element, top, height) => (a, attr) => {
+    const attrValue = element.getAttribute(attr)
+    if (!attrValue) return a
+
+    const baseAttr = attr.split('-')[1]
+    const {value, spread} = structureElData(baseAttr, attrValue)
+    const domain = genDomain(top, height, spread, baseAttr, value)
+
+    return {
+      ...a,
+      [baseAttr]: {
+        value,
+        spread,
+        scales: getInferredAttrs(baseAttr).map((val, i) => {
+          return scaleLinear()
+            .domain(domain)
+            .range([value.from[i], value.to[i]])
+            .clamp(true)
+        })
+      }
+    }
+  }
+
+  /**
+   * Updates any changed values from a resize event: element top, height, and each
+   * attributes' domain values
+   *
+   * @return {undefined}
+   */
+  const cacheData = () => {
+    props.elData = props.elData.map(data => {
+      data.element.style = ''
+      const initialTransform = getInitialTransform(data.element)
+      const {top, height} = getDimensions(data.element)
+      const attrCreatorReducer = cacheAttrCreator(data.element, top, height)
+
+      const d = {
+        ...data,
+        dimensions: {top, height},
+        transforms: {
+          initial: data.transforms.initial,
+          ...reduce(omit(data.transforms, 'initial'), attrCreatorReducer, {})
+        },
+        styles: reduce(data.styles, attrCreatorReducer, {})
+      }
+
+      updateTransform(d)
+      return d
+    })
+  }
+
+  /**
+   * Similar to `attrCreator`, is the reducer function for only updating the scale
+   * domains for both transforms and styles
+   * NOTE: this returned function to pass to a reducer is designed to be used in
+   * reduce from lodash as the collection being reduced over is an object
+   *
+   * @param  {DOM Node} element   [description]
+   * @param  {Number} top         [description]
+   * @param  {Number} height)     [description]
+   * @return {Object}             [description]
+   */
+  const cacheAttrCreator = (element, top, height) => (acc, cur, key) => ({
+    ...acc,
+    [key]: {
+      ...cur,
+      scales: cur.scales.map(s => s.domain(genDomain(top, height, cur.spread, key, cur.value)))
+    }
+  })
+
+  /**
+   * For an attribute that contains multiple values (eg margin), returns the separate values
+   * related to the shorthand property. Single values are returned as is but wrapped in an array
+   * NOTE: the actual values in the array are irrelevant, just the length of the array that is returned
+   *
+   * @param  {String} attr  css property obtained from DOM element attribute
+   * @return {Array}        separated values for shorthand css property, if necessary
+   */
+  const getInferredAttrs = attr => {
+    switch (attr) {
+      case 'margin':
+        return ['marginTop', 'marginRight', 'marginBottom', 'marginLeft']
+      default:
+        return [attr]
+    }
+  }
+
+  /**
+   * Calculates how many pixels vertically a css property will change over
+   * the course of the parallax animation
+   *
+   * @param  {String} attr     CSS property (camelCase)
+   * @param  {Object} change   Contains `to` and `from` values
+   * @param  {Number} elHeight Elements height
+   * @return {Object}          Resolves `to` and `from` values adjusted from `change` param
+   */
   const interpretVerticalChange = (attr, change, elHeight) => {
     switch (attr) {
       case 'translateY':
@@ -287,99 +435,45 @@ const parelax = (selector = '.js-parelax') => {
     }
   }
 
-  const interpretSpread = (elementHeight, [anchorPoint, percentage]) => {
-    const anchorMap = {
-      top: 0,
-      center: elementHeight / 2,
-      bottom: elementHeight
-    }
-
-    return (props.viewportHeight * percentage) - anchorMap[anchorPoint]
-  }
-
-  const updateTransform = data => {
-    const tForm = generateTransform(data.transforms)
-    const styles = generateStyle(data.styles)
-
-    console.log(styles)
-    data.element.style = styles
-    data.element.style.transform = tForm
-    data.currentTransform = tForm
-  }
-
-  // const getInitialStyles = element => {
-  //   // remove individual transform attrs as they all live in the `transform` prop.
-  //   // convert attr names from camelCase to kebabCase
-  //   const cssAttrs = possibleAttrs.filter(attr => {
-  //     return !transformAttrs.includes(attr)
-  //   }).map(kebabCase).concat(['transform'])
-  //   const computedStyle = window.getComputedStyle(element)
-
-  //   //
-  //   return cssAttrs.reduce((a, c) => { return {...a, [c]: computedStyle[c]} }, {})
-  // }
-
-  const setupData = () => {
-    props.elData = map(els, element => {
-      // get computed matrix transform style
-      const initialTransform = getInitialTransform(element)
-      const {top, height} = getDimensions(element)
-      const attrCreatorReducer = attrCreator(element, top, height)
-
-      const data = {
-        element: element,
-        inview: true,
-        currentStyles: {},
-        dimensions: {top, height},
-        transforms: {
-          initial: parseMatrix(initialTransform),
-          ...attrs.transform.prefixed.reduce(attrCreatorReducer, {})
-        },
-        styles: {
-          ...attrs.css.prefixed.reduce(attrCreatorReducer, {})
-        }
-      }
-
-      // debugger
-      // console.log(data)
-      updateTransform(data)
-      return data
-    })
-  }
-
-  // after element, that elements top and height are passed to first function, return the
-  // function to run through reduce to generate the data objects for each attribute with the
-  // needed scales for each attr
-  const attrCreator = (element, top, height) => (a, attr) => {
-    const attrValue = element.getAttribute(attr)
-    if (!attrValue) return a
-
-    const baseAttr = attr.split('-')[1]
-    const {value, spread} = structureElData(baseAttr, attrValue)
-    const domain = genDomain(top, height, spread, baseAttr, value)
-
-    return {
-      ...a,
-      [baseAttr]: {
-        value,
-        spread,
-        scales: getInferredAttrs(baseAttr).map((val, i) => {
-          return scaleLinear()
-            .domain(domain)
-            .range([value.from[i], value.to[i]])
-            .clamp(true)
-        })
-      }
-    }
-  }
-
-  const getInferredAttrs = attr => {
+  // given a style attribute and the value, handles the different ways those values are interpreted
+  // example multi value attributes get stored as arrays and single values are converted to numbers
+  // returning the default single value in an array to maintain method of using values in setting range
+  // in setupData
+  const attrParser = (attr, value) => {
     switch (attr) {
       case 'margin':
-        return ['marginTop', 'marginRight', 'marginBottom', 'marginLeft']
+      case 'rotate3d':
+        return value.split(' ').map(n => +n)
       default:
-        return [attr]
+        return [+value]
     }
+  }
+
+  // callback for checkpoint to simulate elements scrolled inview at bottom of viewport
+  const onElementTopAtBottom = (elementIndex, dir) => {
+    props.elData[elementIndex].inview = dir === 'up'
+  }
+
+  // callback for checkpoint to simulate elements scrolled inview at top of viewport
+  const onElementBottomAtTop = (elementIndex, dir) => {
+    props.elData[elementIndex].inview = dir === 'down'
+  }
+
+  const onScroll = () => {
+    const inviewEls = props.elData.filter(el => el.inview)
+    if (inviewEls.length === 0) return
+    props.currentScroll = window.pageYOffset
+    inviewEls.forEach(updateTransform)
+  }
+
+  const onResize = () => {
+    props.viewportHeight = getWindowHeight()
+    // props.adjustedOffset = props.viewportHeight * 0.1
+    cacheData()
+  }
+
+  const createChildren = () => {
+    els = document.querySelectorAll(selector)
   }
 
   const init = () => {
@@ -391,7 +485,7 @@ const parelax = (selector = '.js-parelax') => {
   const enable = () => {
     if (props.isEnabled) return
 
-    props.ckPoint.init()
+    // props.ckPoint.init()
 
     // forEach(els, (element, i) => {
     //   props.ckPoint.addCheckpoint({
@@ -419,7 +513,7 @@ const parelax = (selector = '.js-parelax') => {
 
     window.addEventListener('scroll', onScroll)
     if (!props.isMobileDevice) {
-      // window.addEventListener('resize', cbs.onResize)
+      window.addEventListener('resize', cbs.onResize)
     }
 
     props.isEnabled = true
@@ -432,6 +526,18 @@ const parelax = (selector = '.js-parelax') => {
     window.removeEventListener('resize', cbs.onResize)
     props.isEnabled = false
   }
+
+  // const getInitialStyles = element => {
+  //   // remove individual transform attrs as they all live in the `transform` prop.
+  //   // convert attr names from camelCase to kebabCase
+  //   const cssAttrs = possibleAttrs.filter(attr => {
+  //     return !transformAttrs.includes(attr)
+  //   }).map(kebabCase).concat(['transform'])
+  //   const computedStyle = window.getComputedStyle(element)
+
+  //   //
+  //   return cssAttrs.reduce((a, c) => { return {...a, [c]: computedStyle[c]} }, {})
+  // }
 
   return {
     init, enable, disable
