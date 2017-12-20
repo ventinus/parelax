@@ -58,7 +58,7 @@ const parelax = (selector = '.js-parelax') => {
       normal: ['translateY', 'translateX', 'scaleX', 'skewY', 'skewX', 'scaleY', 'rotate', 'rotate3d', 'rotateX', 'rotateY', 'rotateZ']
     },
     css: {
-      normal: ['width', 'height', 'padding', 'margin', 'fontSize', 'zIndex', 'opacity']
+      normal: ['width', 'height', 'padding', 'margin', 'fontSize', 'zIndex', 'opacity', 'top', 'right', 'bottom', 'left']
     },
     all: {}
   }
@@ -173,40 +173,46 @@ const parelax = (selector = '.js-parelax') => {
   // structures it meaningfully
   const structureElData = (attr, t) => {
     // const t = "value=100;spread=top,0.75,bottom,0.25"
-    const parsed = t.split(';').reduce((a, c) => {
-      const [k, v] = c.split('=')
-      return {
-        ...a,
-        [k]: !v.includes(',') ? +v : chunk(v.split(','), 2).reduce((a, c) => {
-          return {
-            ...a,
-            [c[0]]: attrParser(attr, c[1])
-          }
-        }, {})
+    const split = t.split(';').map(s => s.split('='))
+    const value = split.find(s => s[0] === 'value')[1]
+    const spread = split.find(s => s[0] === 'spread')[1]
+
+    const result = {
+      spread: {
+        start: {top: 1},
+        finish: {bottom: 0}
+      },
+      value: value.includes(',')
+        ? chunk(value.split(','), 2).reduce((a, [k ,v]) => ({
+          ...a,
+          [k]: attrParser(attr, v)
+        }), {})
+        : {
+          from: [+value / 2],
+          to: [+value / -2]
+        }
+    }
+
+
+    if (spread) {
+      const [start, finish] = chunk(spread.split(','), 2).map(set => {
+        return [set[0], +set[1]]
+      }).sort((a, b) =>  b[1] - a[1])
+
+      result.spread = {
+        start,
+        finish
       }
-    }, {})
-
-    parsed.spread = parsed.spread || {
-      top: 1,
-      bottom: 0
     }
 
-    parsed.value = typeof parsed.value === 'object' ? parsed.value : {
-      from: parsed.value / 2,
-      to: -parsed.value / 2
-    }
-
-    return parsed
+    return result
   }
 
   // returns an array of start and end *scroll* values to scale from (anything that starts in the viewport would be zero)
   // accounts for changes that affect element vertically - translateY, scaleY, height, skewY, fontSize, margin, padding
   const genDomain = (top, height, spread, attr, valueChange) => {
-
-    const [start, finish] = toPairs(spread).sort((a, b) => a[1] < b[1])
-
-    const startSpread = interpretSpread(height, start)
-    const finishSpread = interpretSpread(height, finish)
+    const startSpread = interpretSpread(height, spread.start)
+    const finishSpread = interpretSpread(height, spread.finish)
     const verticalChange = interpretVerticalChange(attr, valueChange, height)
 
     return [(top - startSpread) + verticalChange.from, (top - finishSpread) + verticalChange.to]
@@ -282,7 +288,6 @@ const parelax = (selector = '.js-parelax') => {
       }
 
       data.maxDomain = getMaxDomain(data)
-      // console.log(data.maxDomain)
 
       updateTransform(data)
       return data
@@ -421,6 +426,8 @@ const parelax = (selector = '.js-parelax') => {
   const interpretVerticalChange = (attr, change, elHeight) => {
     switch (attr) {
       case 'translateY':
+      case 'top':
+      case 'bottom':
       case 'fontSize':
         return {
           from: change.from[0],
