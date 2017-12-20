@@ -21,8 +21,9 @@ import {getWindowHeight} from '.'
 //  absolute position, then instruct the parent element to take the height of parallaxed
 //  element to counter collapse
 
-const parelax = (selector = '.js-parelax') => {
+const parelax = (prefix = 'parelax') => {
   const props = {
+    prefix,
     isEnabled: false,
     elData: [
       // {
@@ -47,6 +48,8 @@ const parelax = (selector = '.js-parelax') => {
     viewportHeight: getWindowHeight(),
     isMobileDevice: mobileRE.test(navigator.userAgent)
   }
+
+  console.log(props.currentScroll)
 
   const cbs = {}
 
@@ -74,7 +77,7 @@ const parelax = (selector = '.js-parelax') => {
   let els = []
 
   function parelaxPrefix(str) {
-    return `parelax-${str}`
+    return `${props.prefix}-${str}`
   }
 
   /**
@@ -151,7 +154,14 @@ const parelax = (selector = '.js-parelax') => {
     return matrix.length === 0 ? [1, 0, 0, 1, 0, 0] : matrix.substring(7, matrix.length - 1).split(',').map(parseFloat)
   }
 
-  // returns top and height values of an element with scroll value taken into account
+
+  /**
+   * Returns top and height of an element. Top takes into account the current
+   * scroll value.
+   *
+   * @param  {DOM Node} element Node to get top/height values
+   * @return {Object}           Resulting top/height values
+   */
   const getDimensions = (element) => {
     const {top, height} = element.getBoundingClientRect()
     const realTop = top + props.currentScroll
@@ -219,25 +229,48 @@ const parelax = (selector = '.js-parelax') => {
     return result
   }
 
-  // returns an array of start and end *scroll* values to scale from (anything that starts in the viewport would be zero)
-  // accounts for changes that affect element vertically - translateY, scaleY, height, skewY, fontSize, margin, padding
+  /**
+   * Generates the domain (an array of two values: start and end) that correspond to
+   * the scroll value that will be input to a scale for a given element. Takes into
+   * account the spread (where on the viewport to start and end) and how much vertical
+   * displacement there is when an element is being animated
+   *
+   * @param  {Number} top         Distance from top of element to top of document
+   * @param  {Number} height      Height of element
+   * @param  {Object} spread      Where in the viewport do the animations occur
+   * @param  {String} attr        CSS attribute being animated
+   * @param  {Object} valueChange What the applied changes are at the start and end
+   * @return {Array}              Start and end scroll values to animate between
+   */
   const genDomain = (top, height, spread, attr, valueChange) => {
     const startSpread = interpretSpread(height, spread.start)
     const finishSpread = interpretSpread(height, spread.finish)
     const verticalChange = interpretVerticalChange(attr, valueChange, height)
 
+    const s = (top - startSpread) + verticalChange.from
+    console.log(top)
+    // TODO: still not be calculated correctly. top values are off the amount of animation change
+
     return [(top - startSpread) + verticalChange.from, (top - finishSpread) + verticalChange.to]
   }
 
+  /**
+   * Going through all transform and style changes on an element, gets the min and
+   * max scroll values to simulate `inview` values to start responding
+   *
+   * @param  {Object} options.transforms All transform data for the element
+   * @param  {Object} options.styles     All style data for the element
+   * @return {Array}                     The absolute min and max scroll values of all changes
+   */
   const getMaxDomain = ({transforms, styles}) => {
     const domains = Object.values({
       ...omit(transforms, 'initial'),
       ...styles
-    }).map(data => data.domain.sort())
+    }).map(data => data.domain)
 
     return domains.reduce(([min, max], [first, second]) => {
-      return [min === 0 ? first : first < min ? first : min, second > max ? second : max]
-    }, [0, 0])
+      return [first < min ? first : min, second > max ? second : max]
+    })
   }
 
   /**
@@ -300,6 +333,7 @@ const parelax = (selector = '.js-parelax') => {
 
       data.maxDomain = getMaxDomain(data)
 
+      console.log(data.maxDomain)
       updateTransform(data)
       return data
     })
@@ -504,7 +538,7 @@ const parelax = (selector = '.js-parelax') => {
   }
 
   const createChildren = () => {
-    els = document.querySelectorAll(selector)
+    els = document.querySelectorAll(`.js-${prefix}`)
   }
 
   const init = () => {
