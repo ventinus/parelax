@@ -90,6 +90,7 @@ const parelax = (selector = '.js-parelax') => {
     const [initialScaleX, initialSkewY, initialSkewX, initialScaleY, initialX, initialY] = tForms.initial
     const {scaleX, skewY, skewX, scaleY, translateX, translateY, rotate, rotateX, rotateY, rotate3d} = tForms
 
+    // TODO: refactor?
     const scX = !scaleX ? initialScaleX : scaleX.scales[0](currentScroll)
     const skY = !skewY ? initialSkewY : skewY.scales[0](currentScroll)
     const skX = !skewX ? initialSkewX : skewX.scales[0](currentScroll)
@@ -131,22 +132,6 @@ const parelax = (selector = '.js-parelax') => {
   }
 
   /**
-   * Formats inline styles correctly. Currently detecting whether a CSS property uses px or not
-   *
-   * @param  {Number} value CSS property value
-   * @param  {String} attr  CSS property
-   * @return {String}       Resulting CSS value
-   */
-  const setStyleDisplay = (value, attr) => {
-    switch (attr) {
-      case 'opacity':
-        return `${value}`
-      default:
-        return `${value}px`
-    }
-  }
-
-  /**
    * Joins and wraps array values with matrix string for inline styles
    *
    * @param  {Array}  array Regular matrix values
@@ -175,6 +160,13 @@ const parelax = (selector = '.js-parelax') => {
     }
   }
 
+  /**
+   * Determines if and returns any transforms applied to the element through CSS
+   * Returns 'none' if no transform styles are present
+   *
+   * @param  {DOM Node} element   Node to read transform styles from
+   * @return {String}             Computed transform style or 'none'
+   */
   const getInitialTransform = element => {
     const computedTransform = window.getComputedStyle(element).transform
     return computedTransform === 'none' ? '' : computedTransform
@@ -250,13 +242,8 @@ const parelax = (selector = '.js-parelax') => {
    * @return {undefined}
    */
   const updateTransform = data => {
-    const tForm = generateTransform(data.transforms)
-    const styles = generateStyle(data.styles)
-
-    // TODO: do i need to store currentStyles? why store currentTransform?
-    data.element.style = styles
-    data.element.style.transform = tForm
-    data.currentTransform = tForm
+    data.element.style = generateStyle(data.styles)
+    data.element.style.transform = generateTransform(data.transforms)
   }
 
   /**
@@ -308,6 +295,8 @@ const parelax = (selector = '.js-parelax') => {
     const baseAttr = attr.split('-')[1]
     const {value, spread} = structureElData(baseAttr, attrValue)
     const domain = genDomain(top, height, spread, baseAttr, value)
+
+    // TODO: knowing the domain, create the checkpoints here for `inview` functionality
 
     return {
       ...a,
@@ -367,9 +356,26 @@ const parelax = (selector = '.js-parelax') => {
     ...acc,
     [key]: {
       ...cur,
+      // TODO: knowing the domain, create the checkpoints here for `inview` functionality
       scales: cur.scales.map(s => s.domain(genDomain(top, height, cur.spread, key, cur.value)))
     }
   })
+
+  /**
+   * Formats inline styles correctly. Currently detecting whether a CSS property uses px or not
+   *
+   * @param  {Number} value CSS property value
+   * @param  {String} attr  CSS property
+   * @return {String}       Resulting CSS value
+   */
+  const setStyleDisplay = (value, attr) => {
+    switch (attr) {
+      case 'opacity':
+        return `${value}`
+      default:
+        return `${value}px`
+    }
+  }
 
   /**
    * For an attribute that contains multiple values (eg margin), returns the separate values
