@@ -1,19 +1,21 @@
-import {forEach, map, reduce, omit, throttle, debounce, chunk, toPairs, kebabCase} from 'lodash'
+import {forEach, map, reduce, omit, throttle, debounce, chunk, toPairs, kebabCase, inRange} from 'lodash'
 import {scaleLinear} from 'd3-scale'
 import {mobileRE} from 'savnac-utils'
-import {checkpoint, getWindowHeight} from '.'
+import {getWindowHeight} from '.'
 
 // needs:
 //  - all checkpoints are defined on a percentage in/out viewport basis
 //  - define from and to values (in px/number ie not %) for transitioning property and start and end (0-1) checkpoints
 //  - be able to "aniamte" any numeric property beyond just transforms
 
-// possible issues:
 
 // todos:
+//  add support for percentages
+//  add css properties: top, right, bottom, left
 //  add ability to animate things on a quadratic curve (ie animate opacity in and out)
-//  add any numeric style property as animatable
-//  how to calculate rotation in matrix
+
+// down the line:
+//  how to calculate rotation in matrix (or at least combine all rotations into one)
 
 const parelax = (selector = '.js-parelax') => {
   const props = {
@@ -37,15 +39,10 @@ const parelax = (selector = '.js-parelax') => {
       //   }
       // }
     ],
-    // ckPoint: checkpoint(),
     currentScroll: window.pageYOffset,
     viewportHeight: getWindowHeight(),
-    // amount beyond viewport to start responding to an element "inview"
-    adjustedOffset: 0,
     isMobileDevice: mobileRE.test(navigator.userAgent)
   }
-
-  // props.adjustedOffset = props.viewportHeight * 0.1
 
   const cbs = {}
 
@@ -215,6 +212,17 @@ const parelax = (selector = '.js-parelax') => {
     return [(top - startSpread) + verticalChange.from, (top - finishSpread) + verticalChange.to]
   }
 
+  const getMaxDomain = ({transforms, styles}) => {
+    const domains = Object.values({
+      ...omit(transforms, 'initial'),
+      ...styles
+    }).map(data => data.domain.sort())
+
+    return domains.reduce(([min, max], [first, second]) => {
+      return [min === 0 ? first : first < min ? first : min, second > max ? second : max]
+    }, [0, 0])
+  }
+
   /**
    * Figures out how much inside and outside of viewport to change element values.
    * for example, only need to adjsut an elemnet when bottom of element is at the bottom
@@ -273,6 +281,9 @@ const parelax = (selector = '.js-parelax') => {
         }
       }
 
+      data.maxDomain = getMaxDomain(data)
+      // console.log(data.maxDomain)
+
       updateTransform(data)
       return data
     })
@@ -296,13 +307,12 @@ const parelax = (selector = '.js-parelax') => {
     const {value, spread} = structureElData(baseAttr, attrValue)
     const domain = genDomain(top, height, spread, baseAttr, value)
 
-    // TODO: knowing the domain, create the checkpoints here for `inview` functionality
-
     return {
       ...a,
       [baseAttr]: {
         value,
         spread,
+        domain,
         scales: getInferredAttrs(baseAttr).map((val, i) => {
           return scaleLinear()
             .domain(domain)
@@ -336,6 +346,8 @@ const parelax = (selector = '.js-parelax') => {
         styles: reduce(data.styles, attrCreatorReducer, {})
       }
 
+      d.maxDomain = getMaxDomain(d)
+
       updateTransform(d)
       return d
     })
@@ -352,14 +364,17 @@ const parelax = (selector = '.js-parelax') => {
    * @param  {Number} height)     [description]
    * @return {Object}             [description]
    */
-  const cacheAttrCreator = (element, top, height) => (acc, cur, key) => ({
-    ...acc,
-    [key]: {
-      ...cur,
-      // TODO: knowing the domain, create the checkpoints here for `inview` functionality
-      scales: cur.scales.map(s => s.domain(genDomain(top, height, cur.spread, key, cur.value)))
+  const cacheAttrCreator = (element, top, height) => (acc, cur, key) => {
+    const domain = genDomain(top, height, cur.spread, key, cur.value)
+    return {
+      ...acc,
+      [key]: {
+        ...cur,
+        domain,
+        scales: cur.scales.map(s => s.domain(domain))
+      }
     }
-  })
+  }
 
   /**
    * Formats inline styles correctly. Currently detecting whether a CSS property uses px or not
@@ -432,7 +447,6 @@ const parelax = (selector = '.js-parelax') => {
           from: elHeight * (change.from + 1),
           to: elHeight * (change.to + 1)
         }
-        break;
       default:
         return {
           from: 0,
@@ -455,26 +469,19 @@ const parelax = (selector = '.js-parelax') => {
     }
   }
 
-  // callback for checkpoint to simulate elements scrolled inview at bottom of viewport
-  const onElementTopAtBottom = (elementIndex, dir) => {
-    props.elData[elementIndex].inview = dir === 'up'
-  }
-
-  // callback for checkpoint to simulate elements scrolled inview at top of viewport
-  const onElementBottomAtTop = (elementIndex, dir) => {
-    props.elData[elementIndex].inview = dir === 'down'
-  }
-
   const onScroll = () => {
-    const inviewEls = props.elData.filter(el => el.inview)
-    if (inviewEls.length === 0) return
     props.currentScroll = window.pageYOffset
+
+    const inviewEls = props.elData.filter(({maxDomain}) => {
+      const [min, max] = maxDomain.sort()
+      return inRange(props.currentScroll, min, max)
+    })
+
     inviewEls.forEach(updateTransform)
   }
 
   const onResize = () => {
     props.viewportHeight = getWindowHeight()
-    // props.adjustedOffset = props.viewportHeight * 0.1
     cacheData()
   }
 
@@ -490,29 +497,6 @@ const parelax = (selector = '.js-parelax') => {
 
   const enable = () => {
     if (props.isEnabled) return
-
-    // props.ckPoint.init()
-
-    // forEach(els, (element, i) => {
-    //   props.ckPoint.addCheckpoint({
-    //     element,
-    //     handler(direction) {
-    //       onElementTopAtBottom(i, direction)
-    //     },
-    //     // offset: 1
-    //     offset: 2
-    //   })
-
-    //   props.ckPoint.addCheckpoint({
-    //     element,
-    //     handler(direction) {
-    //       onElementBottomAtTop(i, direction)
-    //     },
-    //     trigger: 'bottom',
-    //     // offset: 0
-    //     offset: -2
-    //   })
-    // })
 
     cbs.onScroll = throttle(onScroll, 50)
     cbs.onResize = debounce(onResize, 150, false)
