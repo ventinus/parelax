@@ -5,9 +5,17 @@ import {getWindowHeight} from '.'
 
 // todos:
 //  add support for percentages
+//
+//  test if combining like attrs behaves somewhat properly (rotateY and rotateX and
+//  rotate3d or marginTop and marginRight)
+//
 //  add ability to animate things on a quadratic curve (ie animate opacity in and out)
 
 // down the line:
+//  figure out base stylesheet (if any)
+//
+//  write tests
+//
 //  how to calculate rotation in matrix (or at least combine all rotations into one)
 //
 //  do parallax elements require absolute positioning? regardless, how to handle parallax
