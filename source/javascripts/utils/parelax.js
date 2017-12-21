@@ -4,8 +4,6 @@ import {mobileRE} from 'savnac-utils'
 import {getWindowHeight} from '.'
 
 // todos:
-//  add support for percentages
-//
 //  test if combining like attrs behaves somewhat properly (rotateY and rotateX and
 //  rotate3d or marginTop and marginRight)
 //
@@ -98,21 +96,22 @@ const parelax = (prefix = 'parelax') => {
    * values appended after the matrix (because i dont know how to calculate rotation into a matrix
    * (and matrix3d))
    *
-   * @param  {Object} tForms  Set of transforms
+   * @param  {Object} elData  All data for the element
    * @return {String}         Matrix and rotation style to be applied inline
    */
-  const generateTransform = tForms => {
+  const generateTransform = elData => {
+    const {dimensions: {width, height}} = elData
     const {currentScroll} = props
-    const [initialScaleX, initialSkewY, initialSkewX, initialScaleY, initialX, initialY] = tForms.initial
-    const {scaleX, skewY, skewX, scaleY, translateX, translateY, rotate, rotateX, rotateY, rotate3d} = tForms
+    const [initialScaleX, initialSkewY, initialSkewX, initialScaleY, initialX, initialY] = elData.transforms.initial
+    const {scaleX, skewY, skewX, scaleY, translateX, translateY, rotate, rotateX, rotateY, rotate3d} = elData.transforms
 
     // TODO: refactor?
     const scX = !scaleX ? initialScaleX : scaleX.scales[0](currentScroll)
     const skY = !skewY ? initialSkewY : skewY.scales[0](currentScroll)
     const skX = !skewX ? initialSkewX : skewX.scales[0](currentScroll)
     const scY = !scaleY ? initialScaleY : scaleY.scales[0](currentScroll)
-    const tX = !translateX ? initialX : translateX.scales[0](currentScroll) + initialX
-    const tY = !translateY ? initialY : translateY.scales[0](currentScroll) + initialY
+    const tX = !translateX ? initialX : calcTransform(translateX.scales[0](currentScroll), width, translateX.value.from[0])
+    const tY = !translateY ? initialY : calcTransform(translateY.scales[0](currentScroll), height, translateY.value.from[0])
 
     const r = rotateVal('rotate', rotate)
     const rX = rotateVal('rotateX', rotateX)
@@ -120,6 +119,10 @@ const parelax = (prefix = 'parelax') => {
     const r3d = rotateVal('rotate3d', rotate3d)
 
     return `${matrix([scX, skY, skX, scY, tX, tY])} ${r} ${rX} ${rY} ${r3d}`.trim()
+  }
+
+  const calcTransform = (scaledTransform, size, fromVal) => {
+    return fromVal.includes('%') ? (scaledTransform / 100) * size : scaledTransform
   }
 
   /**
@@ -143,7 +146,7 @@ const parelax = (prefix = 'parelax') => {
     const {currentScroll} = props
 
     return Object.keys(styles).reduce((a, k, i) => {
-      return `${a}${k}:${styles[k].scales.map(s => setStyleDisplay(s(currentScroll), k)).join(' ')};`
+      return `${a}${k}:${styles[k].scales.map(s => setStyleDisplay(s(currentScroll), k, styles[k].value.from[0])).join(' ')};`
     }, '')
   }
 
@@ -171,13 +174,14 @@ const parelax = (prefix = 'parelax') => {
    * scroll value.
    *
    * @param  {DOM Node} element Node to get top/height values
-   * @return {Object}           Resulting top/height values
+   * @return {Object}           Resulting top/height/width values
    */
   const getDimensions = (element) => {
-    const {top, height} = element.getBoundingClientRect()
+    const {top, height, width} = element.getBoundingClientRect()
     const realTop = top + props.currentScroll
     return {
       height,
+      width,
       top: realTop
     }
   }
@@ -224,8 +228,8 @@ const parelax = (prefix = 'parelax') => {
         }), {})
         // default value
         : {
-          from: [+value / 2],
-          to: [+value / -2]
+          from: [adjustAttrValue(value).divide(2)],
+          to: [adjustAttrValue(value).divide(-2)]
         }
     }
 
@@ -308,7 +312,7 @@ const parelax = (prefix = 'parelax') => {
    */
   const updateTransform = data => {
     data.element.style = generateStyle(data.styles)
-    data.element.style.transform = generateTransform(data.transforms)
+    data.element.style.transform = generateTransform(data)
   }
 
   /**
@@ -322,13 +326,13 @@ const parelax = (prefix = 'parelax') => {
     props.elData = map(els, element => {
       // get computed matrix transform style
       const initialTransform = getInitialTransform(element)
-      const {top, height} = getDimensions(element)
+      const {top, height, width} = getDimensions(element)
       const attrCreatorReducer = attrCreator(element, top, height)
 
       const data = {
         element: element,
         inview: true,
-        dimensions: {top, height},
+        dimensions: {top, height, width},
         transforms: {
           initial: parseMatrix(initialTransform),
           ...attrs.transform.prefixed.reduce(attrCreatorReducer, {})
@@ -372,7 +376,7 @@ const parelax = (prefix = 'parelax') => {
         scales: getInferredAttrs(baseAttr).map((val, i) => {
           return scaleLinear()
             .domain(domain)
-            .range([value.from[i], value.to[i]])
+            .range([parseFloat(value.from[i]), parseFloat(value.to[i])])
             .clamp(true)
         })
       }
@@ -389,12 +393,12 @@ const parelax = (prefix = 'parelax') => {
     props.elData = props.elData.map(data => {
       data.element.style = ''
       const initialTransform = getInitialTransform(data.element)
-      const {top, height} = getDimensions(data.element)
+      const {top, height, width} = getDimensions(data.element)
       const attrCreatorReducer = cacheAttrCreator(data.element, top, height)
 
       const d = {
         ...data,
-        dimensions: {top, height},
+        dimensions: {top, height, width},
         transforms: {
           initial: data.transforms.initial,
           ...reduce(omit(data.transforms, 'initial'), attrCreatorReducer, {})
@@ -433,13 +437,18 @@ const parelax = (prefix = 'parelax') => {
   }
 
   /**
-   * Formats inline styles correctly. Currently detecting whether a CSS property uses px or not
+   * Formats inline styles correctly. Currently detecting whether a CSS property uses px or not.
+   * If '%' is present, always use that
    *
    * @param  {Number} value CSS property value
    * @param  {String} attr  CSS property
    * @return {String}       Resulting CSS value
    */
-  const setStyleDisplay = (value, attr) => {
+  const setStyleDisplay = (value, attr, firstFromVal) => {
+    if (firstFromVal.includes && firstFromVal.includes('%')) {
+      return `${value}%`
+    }
+
     switch (attr) {
       case 'opacity':
         return `${value}`
@@ -526,18 +535,52 @@ const parelax = (prefix = 'parelax') => {
     switch (attr) {
       case 'margin':
       case 'rotate3d':
-        return value.split(' ').map(n => +n)
+        return value.split(' ').map(attrUnits)
       default:
-        return [+value]
+        return [attrUnits(value)]
+    }
+  }
+
+  /**
+   * Perserves percentage context if '%' is present, otherwise coerces value to a number
+   *
+   * @param  {String} attrVal     Value from attribute
+   * @return {String|Number}      Parsed appropriately
+   */
+  const attrUnits = attrVal => attrVal.includes('%') ? attrVal : parseFloat(attrVal)
+
+  /**
+   * Given the value of an attribute (which as a string can be a number, or include 'px' or '%')
+   * When it has '%', we want to preserve it as a string but may need to perform calculations.
+   * Provides an interface to perform basic operations, possibility to use currying for added
+   * flexibility
+   *
+   * @param  {String} val Value from an attribute
+   * @return {Object}     Simple mathematical operations to modify original val
+   */
+  const adjustAttrValue = (val) => {
+    const isPercentage = val.includes('%')
+    const n = parseFloat(val)
+
+    const returnVal = (output) => isPercentage ? `${output}%` : output
+
+    return {
+      add: (num) => returnVal(n + num),
+      subtract: (num) => returnVal(n - num),
+      multiply: (num) => returnVal(n * num),
+      divide: (num) => returnVal(n / num),
     }
   }
 
   const onScroll = () => {
     props.currentScroll = window.pageYOffset
 
+    // seeeing an issue with filtering out 'out-of-view' elements because scroll events
+    // arent always being triggered enough so they dont hit their top/bottom values
     const inviewEls = props.elData.filter(({maxDomain}) => {
-      const [min, max] = maxDomain.sort()
-      return inRange(props.currentScroll, min, max)
+      const [min, max] = maxDomain
+      // give elements a buffer of 30px on both ends to make sure they get ther min/max values applied
+      return inRange(props.currentScroll, min - 30, max + 30)
     })
 
     inviewEls.forEach(updateTransform)
