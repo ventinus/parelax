@@ -1,12 +1,7 @@
-import {forEach, map, reduce, omit, throttle, debounce, chunk, toPairs, kebabCase, inRange} from 'lodash'
+import {forEach, map, reduce, omit, throttle, debounce, chunk, inRange} from 'lodash'
 import {scaleLinear} from 'd3-scale'
 import {mobileRE} from 'savnac-utils'
 import {getWindowHeight} from '.'
-
-// needs:
-//  - all checkpoints are defined on a percentage in/out viewport basis
-//  - define from and to values (in px/number ie not %) for transitioning property and start and end (0-1) checkpoints
-//  - be able to "aniamte" any numeric property beyond just transforms
 
 // todos:
 //  add support for percentages
@@ -20,6 +15,17 @@ import {getWindowHeight} from '.'
 //  positioning). maybe dom structure is the better answer (where possible). also, if
 //  absolute position, then instruct the parent element to take the height of parallaxed
 //  element to counter collapse
+//
+//  sometimes scroll events are delayed. perhaps consider running a continuous loop with RAF/setTimeout
+//  and debounce scroll with leading set to true to toggle an `isScrolling` value to allow updates
+//  to be made (or to initiate/kill RAF)
+//
+//  going to compensate for nested parallax elements?
+//
+//  add support for callbacks at trigger points? such as add `position:fixed;`. functionality
+//  is handled in checkpoint, although that currently doesnt work with parallax as it only
+//  caches values at the fore. pass an optional `isParallax` flag to checkpoint to continuous
+//  measurements?
 
 const parelax = (prefix = 'parelax') => {
   const props = {
@@ -48,8 +54,6 @@ const parelax = (prefix = 'parelax') => {
     viewportHeight: getWindowHeight(),
     isMobileDevice: mobileRE.test(navigator.userAgent)
   }
-
-  console.log(props.currentScroll)
 
   const cbs = {}
 
@@ -154,7 +158,6 @@ const parelax = (prefix = 'parelax') => {
     return matrix.length === 0 ? [1, 0, 0, 1, 0, 0] : matrix.substring(7, matrix.length - 1).split(',').map(parseFloat)
   }
 
-
   /**
    * Returns top and height of an element. Top takes into account the current
    * scroll value.
@@ -247,10 +250,6 @@ const parelax = (prefix = 'parelax') => {
     const finishSpread = interpretSpread(height, spread.finish)
     const verticalChange = interpretVerticalChange(attr, valueChange, height)
 
-    const s = (top - startSpread) + verticalChange.from
-    console.log(top)
-    // TODO: still not be calculated correctly. top values are off the amount of animation change
-
     return [(top - startSpread) + verticalChange.from, (top - finishSpread) + verticalChange.to]
   }
 
@@ -333,7 +332,6 @@ const parelax = (prefix = 'parelax') => {
 
       data.maxDomain = getMaxDomain(data)
 
-      console.log(data.maxDomain)
       updateTransform(data)
       return data
     })
@@ -507,10 +505,15 @@ const parelax = (prefix = 'parelax') => {
     }
   }
 
-  // given a style attribute and the value, handles the different ways those values are interpreted
-  // example multi value attributes get stored as arrays and single values are converted to numbers
-  // returning the default single value in an array to maintain method of using values in setting range
-  // in setupData
+  /**
+   * given a style attribute and the value, handles the different ways those
+   * values are interpreted. Values are coerced into an array of numbers, even individual ones
+   * for consistency and less special case handling outside in setting range in `setupData`
+   *
+   * @param  {String} attr  CSS attribute
+   * @param  {String} value Space-separated numbers in a string
+   * @return {Array}        Set of numbers from value
+   */
   const attrParser = (attr, value) => {
     switch (attr) {
       case 'margin':
@@ -566,20 +569,9 @@ const parelax = (prefix = 'parelax') => {
 
     window.removeEventListener('scroll', cbs.onScroll)
     window.removeEventListener('resize', cbs.onResize)
+
     props.isEnabled = false
   }
-
-  // const getInitialStyles = element => {
-  //   // remove individual transform attrs as they all live in the `transform` prop.
-  //   // convert attr names from camelCase to kebabCase
-  //   const cssAttrs = possibleAttrs.filter(attr => {
-  //     return !transformAttrs.includes(attr)
-  //   }).map(kebabCase).concat(['transform'])
-  //   const computedStyle = window.getComputedStyle(element)
-
-  //   //
-  //   return cssAttrs.reduce((a, c) => { return {...a, [c]: computedStyle[c]} }, {})
-  // }
 
   return {
     init, enable, disable
