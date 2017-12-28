@@ -1,12 +1,8 @@
 import {forEach, map, reduce, omit, throttle, debounce, chunk, inRange} from 'lodash'
 import {scaleLinear} from 'd3-scale'
-import {mobileRE} from 'savnac-utils'
 import {getWindowHeight} from '.'
 
 // todos:
-//  test if combining like attrs behaves somewhat properly (rotateY and rotateX and
-//  rotate3d or marginTop and marginRight)
-//
 //  add ability to animate things on a quadratic curve (ie animate opacity in and out)
 
 // down the line:
@@ -40,25 +36,27 @@ const parelax = (prefix = 'parelax') => {
     elData: [
       // {
       //   element: DOM,
-      //   inview: false,
+      //   dimensions: {
+      //     top: 1 // real top value with only preexisting transforms
+      //     height: 1,
+      //     width: 1
+      //   }
       //   transforms: {
       //     initial: '',
       //     translateX: {
       //       value: 'from,100,to,-100' || '100' (for equal spread in both directions),
       //       spread: 'top,1,center,0.5',
-      //       scale: scaleLinear().domain().range().clamp(true)
+      //       domain: [400, 600], scroll start and end values
+      //       scales: [scaleLinear().domain().range().clamp(true)]
       //     }
       //   },
-      //   styles: {}
-      //   dimensions: {
-      //     top: 1 // real top value without transforms (or with preexisting transforms)
-      //     height: 1
-      //   }
+      //   styles: {} same structure as transforms but without `initial`
       // }
     ],
     currentScroll: window.pageYOffset,
     viewportHeight: getWindowHeight(),
-    isMobileDevice: mobileRE.test(navigator.userAgent)
+    isMobileDevice: 'ontouchstart' in window,
+    inviewBuffer: 30
   }
 
   const cbs = {}
@@ -133,7 +131,9 @@ const parelax = (prefix = 'parelax') => {
    * @param  {Object} rotateData Data object created by `setupData` for an element
    * @return {String}            Inline CSS value for rotation
    */
-  const rotateVal = (name, rotateData) => !rotateData ? '' : `${name}(${rotateData.scales[0](props.currentScroll)}deg)`
+  const rotateVal = (name, rotateData) => {
+    return !rotateData ? '' : `${name}(${rotateData.scales[0](props.currentScroll)}deg)`
+  }
 
   /**
    * Similar to `generateTransform`, combines and returns all the styles for an element
@@ -331,7 +331,6 @@ const parelax = (prefix = 'parelax') => {
 
       const data = {
         element: element,
-        inview: true,
         dimensions: {top, height, width},
         transforms: {
           initial: parseMatrix(initialTransform),
@@ -573,6 +572,7 @@ const parelax = (prefix = 'parelax') => {
   }
 
   const onScroll = () => {
+    const {inviewBuffer} = props
     props.currentScroll = window.pageYOffset
 
     // seeeing an issue with filtering out 'out-of-view' elements because scroll events
@@ -580,7 +580,7 @@ const parelax = (prefix = 'parelax') => {
     const inviewEls = props.elData.filter(({maxDomain}) => {
       const [min, max] = maxDomain
       // give elements a buffer of 30px on both ends to make sure they get ther min/max values applied
-      return inRange(props.currentScroll, min - 30, max + 30)
+      return inRange(props.currentScroll, min - inviewBuffer, max + inviewBuffer)
     })
 
     inviewEls.forEach(updateTransform)
